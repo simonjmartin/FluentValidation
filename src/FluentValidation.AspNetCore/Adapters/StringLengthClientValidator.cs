@@ -1,4 +1,21 @@
-﻿namespace FluentValidation.AspNetCore {
+﻿#region License
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
+#endregion
+namespace FluentValidation.AspNetCore {
 	using System.Collections.Generic;
 	using Internal;
 	using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
@@ -20,31 +37,37 @@
 		}
 
 		private string GetErrorMessage(LengthValidator lengthVal, ClientModelValidationContext context) {
+			var cfg = context.ActionContext.HttpContext.RequestServices.GetValidatorConfiguration();
 
-			var formatter = new MessageFormatter()
+			var formatter = cfg.MessageFormatterFactory()
 				.AppendPropertyName(Rule.GetDisplayName())
 				.AppendArgument("MinLength", lengthVal.Min)
 				.AppendArgument("MaxLength", lengthVal.Max);
 
-			bool messageNeedsSplitting = lengthVal.ErrorMessageSource.ResourceType == typeof(Messages);
+			bool needsSimplifiedMessage = lengthVal.Options.ErrorMessageSource is LanguageStringSource;
 
 			string message;
 			try {
-				message = lengthVal.ErrorMessageSource.GetString(null);
+				message = lengthVal.Options.ErrorMessageSource.GetString(null);
 			}
 			catch (FluentValidationMessageFormatException) {
-				message = Messages.length_error;
-				messageNeedsSplitting = true;
+				if (lengthVal is ExactLengthValidator) {
+					message = cfg.LanguageManager.GetString("ExactLength_Simple");
+				}
+				else {
+					message = cfg.LanguageManager.GetString("Length_Simple");
+				}
+
+				needsSimplifiedMessage = false;
 			}
 
-			if (messageNeedsSplitting)
-			{
-				// If we're using the default resources then the mesage for length errors will have two parts, eg:
-				// '{PropertyName}' must be between {MinLength} and {MaxLength} characters. You entered {TotalLength} characters.
-				// We can't include the "TotalLength" part of the message because this information isn't available at the time the message is constructed.
-				// Instead, we'll just strip this off by finding the index of the period that separates the two parts of the message.
-
-				message = message.Substring(0, message.IndexOf(".") + 1);
+			if (needsSimplifiedMessage && message.Contains("{TotalLength}")) {
+				if (lengthVal is ExactLengthValidator) {
+					message = cfg.LanguageManager.GetString("ExactLength_Simple");
+				}
+				else {
+					message = cfg.LanguageManager.GetString("Length_Simple");
+				}
 			}
 
 			message = formatter.BuildMessage(message);

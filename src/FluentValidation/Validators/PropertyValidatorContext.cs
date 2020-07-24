@@ -1,69 +1,57 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Validators {
 	using System;
-	using System.Collections.Generic;
-	using System.Linq;
-	using System.Reflection;
-	using Attributes;
 	using Internal;
 
-	public class PropertyValidatorContext {
-		private MessageFormatter messageFormatter;
-		private readonly Lazy<object> propertyValueContainer;
+	public class PropertyValidatorContext : ICommonContext {
+		private MessageFormatter _messageFormatter;
+		private readonly Lazy<object> _propertyValueContainer;
 
-		public ValidationContext ParentContext { get; private set; }
+		public IValidationContext ParentContext { get; private set; }
 		public PropertyRule Rule { get; private set; }
 		public string PropertyName { get; private set; }
-		
-		public string PropertyDescription {
-			get { return Rule.GetDisplayName(); } 
-		}
 
-		public object Instance {
-			get { return ParentContext.InstanceToValidate; }
-		}
+		public string DisplayName => Rule.GetDisplayName(ParentContext);
 
-		public MessageFormatter MessageFormatter
-		{
-			get { return messageFormatter ?? (messageFormatter = new MessageFormatter()); }
-		}
+		public object InstanceToValidate => ParentContext.InstanceToValidate;
+		public MessageFormatter MessageFormatter => _messageFormatter ?? (_messageFormatter = ValidatorOptions.MessageFormatterFactory());
 
 		//Lazily load the property value
 		//to allow the delegating validator to cancel validation before value is obtained
-		public object PropertyValue {
-			get { return propertyValueContainer.Value; }
-		}
+		public object PropertyValue => _propertyValueContainer.Value;
 
-		public PropertyValidatorContext(ValidationContext parentContext, PropertyRule rule, string propertyName) {
+		// Explicit implementation so we don't have to expose the base interface.
+		ICommonContext ICommonContext.ParentContext => ParentContext;
+
+		public PropertyValidatorContext(IValidationContext parentContext, PropertyRule rule, string propertyName) {
 			ParentContext = parentContext;
 			Rule = rule;
 			PropertyName = propertyName;
-			propertyValueContainer = new Lazy<object>( () => rule.PropertyFunc(parentContext.InstanceToValidate));
+			_propertyValueContainer = new Lazy<object>(() => rule.GetPropertyValue(parentContext.InstanceToValidate));
 		}
 
-		public PropertyValidatorContext(ValidationContext parentContext, PropertyRule rule, string propertyName, object propertyValue)
-		{
+		public PropertyValidatorContext(IValidationContext parentContext, PropertyRule rule, string propertyName, object propertyValue) {
 			ParentContext = parentContext;
 			Rule = rule;
 			PropertyName = propertyName;
-			propertyValueContainer = new Lazy<object>(() => propertyValue);
+			_propertyValueContainer = new Lazy<object>(() => propertyValue);
 		}
 	}
 }

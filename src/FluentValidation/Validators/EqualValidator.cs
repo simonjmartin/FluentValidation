@@ -1,54 +1,44 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
+
 #endregion
 
 namespace FluentValidation.Validators {
 	using System;
 	using System.Collections;
 	using System.Reflection;
-	using Attributes;
-	using Internal;
 	using Resources;
 
 	public class EqualValidator : PropertyValidator, IComparisonValidator {
-		readonly Func<object, object> func;
-		readonly IEqualityComparer comparer;
+		readonly Func<object, object> _func;
+		private readonly string _memberDisplayName;
+		readonly IEqualityComparer _comparer;
 
-		public EqualValidator(object valueToCompare) : base(nameof(Messages.equal_error), typeof(Messages)) {
-			this.ValueToCompare = valueToCompare;
-		}
-
-		public EqualValidator(object valueToCompare, IEqualityComparer comparer)
-			: base(nameof(Messages.equal_error), typeof(Messages)) {
+		public EqualValidator(object valueToCompare, IEqualityComparer comparer = null) : base(new LanguageStringSource(nameof(EqualValidator))) {
 			ValueToCompare = valueToCompare;
-			this.comparer = comparer;
+			_comparer = comparer;
 		}
 
-		public EqualValidator(Func<object, object> comparisonProperty, MemberInfo member)
-			: base(nameof(Messages.equal_error), typeof(Messages))  {
-			func = comparisonProperty;
+		public EqualValidator(Func<object, object> comparisonProperty, MemberInfo member, string memberDisplayName, IEqualityComparer comparer = null) : base(new LanguageStringSource(nameof(EqualValidator))) {
+			_func = comparisonProperty;
+			_memberDisplayName = memberDisplayName;
 			MemberToCompare = member;
-		}
-
-		public EqualValidator(Func<object, object> comparisonProperty, MemberInfo member, IEqualityComparer comparer)
-			: base(nameof(Messages.equal_error), typeof(Messages)) {
-			func = comparisonProperty;
-			MemberToCompare = member;
-			this.comparer = comparer;
+			_comparer = comparer;
 		}
 
 		protected override bool IsValid(PropertyValidatorContext context) {
@@ -57,6 +47,8 @@ namespace FluentValidation.Validators {
 
 			if (!success) {
 				context.MessageFormatter.AppendArgument("ComparisonValue", comparisonValue);
+				context.MessageFormatter.AppendArgument("ComparisonProperty", _memberDisplayName ?? "");
+
 				return false;
 			}
 
@@ -64,27 +56,21 @@ namespace FluentValidation.Validators {
 		}
 
 		private object GetComparisonValue(PropertyValidatorContext context) {
-			if(func != null) {
-				return func(context.Instance);
+			if (_func != null) {
+				return _func(context.InstanceToValidate);
 			}
 
 			return ValueToCompare;
 		}
 
-		public Comparison Comparison {
-			get { return Comparison.Equal; }
-		}
+		public Comparison Comparison => Comparison.Equal;
 
 		public MemberInfo MemberToCompare { get; private set; }
 		public object ValueToCompare { get; private set; }
 
 		protected bool Compare(object comparisonValue, object propertyValue) {
-			if(comparer != null) {
-				return comparer.Equals(comparisonValue, propertyValue);
-			}
-
-			if (comparisonValue is IComparable && propertyValue is IComparable) {
-				return Internal.Comparer.GetEqualsResult((IComparable)comparisonValue, (IComparable)propertyValue);
+			if (_comparer != null) {
+				return _comparer.Equals(comparisonValue, propertyValue);
 			}
 
 			return Equals(comparisonValue, propertyValue);

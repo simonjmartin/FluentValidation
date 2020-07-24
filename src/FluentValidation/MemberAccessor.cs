@@ -7,21 +7,16 @@ namespace FluentValidation.Internal
 	using System.Reflection;
 	using Internal;
 
-	public static class MemberAccessor<TObject> {
-		public static MemberAccessor<TObject, TValue> From<TValue>(Expression<Func<TObject, TValue>> getExpression) {
-			return new MemberAccessor<TObject, TValue>(getExpression);
-		} 
-	}
-
 	public class MemberAccessor<TObject, TValue> {
 		readonly Expression<Func<TObject, TValue>> getExpression;
 		readonly Func<TObject, TValue> getter;
 		readonly Action<TObject, TValue> setter;
 
-		public MemberAccessor(Expression<Func<TObject, TValue>> getExpression) {
+		public MemberAccessor(Expression<Func<TObject, TValue>> getExpression, bool writeable) {
 			this.getExpression = getExpression;
 			getter = getExpression.Compile();
-			setter = CreateSetExpression(getExpression).Compile();
+			if(writeable)
+				setter = CreateSetExpression(getExpression).Compile();
 
 			Member = getExpression.GetMember();
 		}
@@ -64,7 +59,7 @@ namespace FluentValidation.Internal
 		}
 
 		public static implicit operator MemberAccessor<TObject, TValue>(Expression<Func<TObject, TValue>> @this) {
-			return new MemberAccessor<TObject, TValue>(@this);
+			return new MemberAccessor<TObject, TValue>(@this, true);
 		}
 	}
 }

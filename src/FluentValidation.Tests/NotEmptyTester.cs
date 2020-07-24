@@ -1,19 +1,19 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Tests {
@@ -24,7 +24,7 @@ namespace FluentValidation.Tests {
 	using System.Threading;
 	using Xunit;
 
-	
+
 	public class NotEmptyTester {
 		public NotEmptyTester() {
           CultureScope.SetDefaultCulture();
@@ -76,7 +76,7 @@ namespace FluentValidation.Tests {
 				v => v.RuleFor(x => x.DateOfBirth).NotEmpty()
 			};
 
-			var result = validator.Validate(new Person { DateOfBirth = default(DateTime) });
+			var result = validator.Validate(new Person { DateOfBirth = default });
 			result.IsValid.ShouldBeFalse();
 		}
 
@@ -110,7 +110,7 @@ namespace FluentValidation.Tests {
 			};
 
 			var result = validator.Validate(new Person { Surname = null });
-			result.Errors.Single().ErrorMessage.ShouldEqual("'Surname' should not be empty.");
+			result.Errors.Single().ErrorMessage.ShouldEqual("'Surname' must not be empty.");
 		}
 
 	    [Fact]
@@ -123,10 +123,18 @@ namespace FluentValidation.Tests {
             result.IsValid.ShouldBeFalse();
 	    }
 
+		[Fact]
+		public void Fails_for_array() {
+			var validator = new InlineValidator<string[]>();
+			validator.RuleFor(x => x).NotEmpty();
+			var result = validator.Validate(new string[0]);
+			result.IsValid.ShouldBeFalse();
+		}
+
         public class TestModel {
             public IEnumerable<string> Strings {
                 get { yield break; }
-            } 
+            }
         }
 	}
 }

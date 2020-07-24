@@ -1,19 +1,19 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Internal {
@@ -26,14 +26,20 @@ namespace FluentValidation.Internal {
 	/// Selects validators that are associated with a particular property.
 	/// </summary>
 	public class MemberNameValidatorSelector : IValidatorSelector {
-		readonly IEnumerable<string> memberNames;
+		internal const string DisableCascadeKey = "_FV_DisableSelectorCascadeForChildRules";
+		readonly IEnumerable<string> _memberNames;
 
 		/// <summary>
 		/// Creates a new instance of MemberNameValidatorSelector.
 		/// </summary>
 		public MemberNameValidatorSelector(IEnumerable<string> memberNames) {
-			this.memberNames = memberNames;
+			_memberNames = memberNames;
 		}
+
+		/// <summary>
+		/// Member names that are validated.
+		/// </summary>
+		public IEnumerable<string> MemberNames => _memberNames;
 
 		/// <summary>
 		/// Determines whether or not a rule should execute.
@@ -42,11 +48,16 @@ namespace FluentValidation.Internal {
 		/// <param name="propertyPath">Property path (eg Customer.Address.Line1)</param>
 		/// <param name="context">Contextual information</param>
 		/// <returns>Whether or not the validator can execute.</returns>
-		public bool CanExecute (IValidationRule rule, string propertyPath, ValidationContext context) {
+		public bool CanExecute (IValidationRule rule, string propertyPath, IValidationContext context) {
 			// Validator selector only applies to the top level.
  			// If we're running in a child context then this means that the child validator has already been selected
 			// Because of this, we assume that the rule should continue (ie if the parent rule is valid, all children are valid)
-			return context.IsChildContext || memberNames.Any(x => x == propertyPath || propertyPath.StartsWith(x + "."));
+			bool isChildContext = context.IsChildContext;
+			bool cascadeEnabled = !context.RootContextData.ContainsKey(DisableCascadeKey);
+
+			return (isChildContext && cascadeEnabled && !_memberNames.Any(x => x.Contains(".")))
+			       || rule is IIncludeRule
+			       || ( _memberNames.Any(x => x == propertyPath || propertyPath.StartsWith(x + ".") || x.StartsWith(propertyPath + ".")));
 		}
 
 		///<summary>
@@ -73,7 +84,7 @@ namespace FluentValidation.Internal {
 			var chain = PropertyChain.FromExpression(expression);
 
 			if (chain.Count == 0) {
-				throw new ArgumentException(string.Format("Expression '{0}' does not specify a valid property or field.", expression));
+				throw new ArgumentException($"Expression '{expression}' does not specify a valid property or field.");
 			}
 
 			return chain.ToString();

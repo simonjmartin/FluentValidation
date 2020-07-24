@@ -1,169 +1,56 @@
-﻿namespace FluentValidation.AspNetCore {
-	using System;
+﻿#region License
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
+#endregion
+
+namespace FluentValidation.AspNetCore {
 	using System.Collections.Generic;
+	using System.Linq;
 	using Microsoft.AspNetCore.Mvc;
-	using Microsoft.AspNetCore.Mvc.Internal;
 	using Microsoft.AspNetCore.Mvc.ModelBinding;
 	using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
-	using System.Linq;
-	using System.Reflection;
-	using Microsoft.AspNetCore.Mvc.Controllers;
-	using FluentValidation;
+#if NETCOREAPP2_1 || NETCOREAPP2_2
+	// For aspnetcore 2.x (targetting NS2.0), the ValidationVisitor class lives in the .Internal namespace
+	using Microsoft.AspNetCore.Mvc.Internal;
+#endif
 
-	//TODO: Need support for client-side
+	internal class FluentValidationObjectModelValidator : ObjectModelValidator {
+		private readonly bool _runMvcValidation;
+		private readonly FluentValidationModelValidatorProvider _fvProvider;
 
-	public class FluentValidationObjectModelValidator : IObjectModelValidator {
-	    public const string InvalidValuePlaceholder = "__FV_InvalidValue";
-		public const string ModelKeyPrefix = "__FV_Prefix_";
-
-		private readonly IValidatorFactory _validatorFactory;
-		private IModelMetadataProvider _modelMetadataProvider;
-		private readonly ValidatorCache _validatorCache;
-		private CompositeModelValidatorProvider _validatorProvider;
-
-		/// <summary>
-		///     Initializes a new instance of <see cref="FluentValidationObjectModelValidator" />.
-		/// </summary>
-		public FluentValidationObjectModelValidator(IModelMetadataProvider modelMetadataProvider, IList<IModelValidatorProvider> validatorProviders,
-			IValidatorFactory validatorFactory) {
-
-			if (modelMetadataProvider == null) {
-				throw new ArgumentNullException(nameof(modelMetadataProvider));
-			}
-
-			_validatorFactory = validatorFactory;
-			_modelMetadataProvider = modelMetadataProvider;
-			_validatorCache = new ValidatorCache();
-			_validatorProvider = new CompositeModelValidatorProvider(validatorProviders);
+		public FluentValidationObjectModelValidator(
+			IModelMetadataProvider modelMetadataProvider,
+			IList<IModelValidatorProvider> validatorProviders, bool runMvcValidation)
+		: base(modelMetadataProvider, validatorProviders) {
+			_runMvcValidation = runMvcValidation;
+			_fvProvider = validatorProviders.SingleOrDefault(x => x is FluentValidationModelValidatorProvider) as FluentValidationModelValidatorProvider;
 		}
 
-		public void Validate(ActionContext actionContext, ValidationStateDictionary validationState, string prefix, object model)
-		{
-			if (actionContext == null) {
-				throw new ArgumentNullException(nameof(actionContext));
-			}
+		public override ValidationVisitor GetValidationVisitor(ActionContext actionContext, IModelValidatorProvider validatorProvider, ValidatorCache validatorCache, IModelMetadataProvider metadataProvider, ValidationStateDictionary validationState) {
+			// Setting as to whether we should run only FV or FV + the other validator providers
+			var validatorProviderToUse = _runMvcValidation ? validatorProvider : _fvProvider;
 
-			IValidator validator = null;
-			var metadata = model == null ? null : _modelMetadataProvider.GetMetadataForType(model.GetType());
+			var visitor = new FluentValidationVisitor(
+				actionContext,
+				validatorProviderToUse,
+				validatorCache,
+				metadataProvider,
+				validationState);
 
-			bool prependPrefix = true;
-
-			if (model != null) {
-				if (metadata.IsCollectionType) {
-					validator = BuildCollectionValidator(prefix, metadata);
-					prependPrefix = false;
-				}
-				else {
-					validator = _validatorFactory.GetValidator(metadata.ModelType);
-				}
-			}
-
-			if (validator == null) {
-				// Use default impl if FV doesn't have a validator for the type.
-				var visitor = new ValidationVisitor(
-						   actionContext,
-						   _validatorProvider,
-						   _validatorCache,
-						   _modelMetadataProvider,
-						   validationState);
-
-				visitor.Validate(metadata, prefix, model);
-
-				return;
-			}
-
-			foreach (var value in actionContext.ModelState.Values
-				.Where(v => v.ValidationState == ModelValidationState.Unvalidated)) {
-				// Set all unvalidated states to valid. If we end up adding an error below then that properties state
-				// will become ModelValidationState.Invalid and will set ModelState.IsValid to false
-
-				value.ValidationState = ModelValidationState.Valid;
-			}
-
-
-			var customizations = GetCustomizations(actionContext, model.GetType(), prefix);
-
-			var selector = customizations.ToValidatorSelector();
-			var interceptor = customizations.GetInterceptor() ?? (validator as IValidatorInterceptor);
-			var context = new FluentValidation.ValidationContext(model, new FluentValidation.Internal.PropertyChain(), selector);
-
-			if (interceptor != null)
-			{
-				// Allow the user to provide a customized context
-				// However, if they return null then just use the original context.
-				context = interceptor.BeforeMvcValidation((ControllerContext)actionContext, context) ?? context;
-			}
-
-			var result = validator.Validate(context);
-
-			if (interceptor != null)
-			{
-				// allow the user to provice a custom collection of failures, which could be empty.
-				// However, if they return null then use the original collection of failures. 
-				result = interceptor.AfterMvcValidation((ControllerContext)actionContext, context, result) ?? result;
-			}
-
-			if (!string.IsNullOrEmpty(prefix)) {
-		        prefix = prefix + ".";
-		    }
-
-			var keysProcessed = new HashSet<string>();
-
-			//First pass: Clear out any model errors for these properties generated by MVC.
-			foreach (var modelError in result.Errors) {
-				string key = modelError.PropertyName;
-
-				if (prependPrefix) {
-					key = prefix + key;
-				}
-				else {
-					key = key.Replace(ModelKeyPrefix, string.Empty);
-				}
-
-				// See if there's already an item in the ModelState for this key. 
-				if (actionContext.ModelState.ContainsKey(key) && !keysProcessed.Contains(key)) {
-					actionContext.ModelState[key].Errors.Clear();
-				}
-
-				keysProcessed.Add(key);
-				actionContext.ModelState.AddModelError(key, modelError.ErrorMessage);
-			}
-		}
-
-		private CustomizeValidatorAttribute GetCustomizations(ActionContext actionContext, Type type, string prefix) {
-			var descriptors = actionContext.ActionDescriptor.Parameters
-				.Where(x => x.ParameterType == type)
-				.Where(x => (x.BindingInfo != null && x.BindingInfo.BinderModelName != null && x.BindingInfo.BinderModelName == prefix) || x.Name == prefix || (prefix == string.Empty && x.BindingInfo?.BinderModelName == null))
-				.OfType<ControllerParameterDescriptor>()
-				.ToList();
-
-			CustomizeValidatorAttribute attribute = null;
-
-			if (descriptors.Count == 1) {
-				attribute = descriptors[0].ParameterInfo.GetCustomAttributes(typeof(CustomizeValidatorAttribute), true).FirstOrDefault() as CustomizeValidatorAttribute;
-			}
-			if (descriptors.Count > 1) {
-				// We found more than 1 matching with same prefix and name. 
-			}
-
-			return attribute ?? new CustomizeValidatorAttribute();
-		}
-
-		private IValidator BuildCollectionValidator(string prefix, ModelMetadata collectionMetadata) {
-			var elementValidator = _validatorFactory.GetValidator(collectionMetadata.ElementType);
-			if (elementValidator == null) return null;
-
-			var type = typeof(MvcCollectionValidator<>).MakeGenericType(collectionMetadata.ElementType);
-			var validator = (IValidator)Activator.CreateInstance(type, elementValidator, prefix);
-			return validator;
-		}
-
-	}
-
-	internal class MvcCollectionValidator<T> : AbstractValidator<IEnumerable<T>> {
-		public MvcCollectionValidator(IValidator<T> validator, string prefix) {
-			if (string.IsNullOrEmpty(prefix)) prefix = FluentValidationObjectModelValidator.ModelKeyPrefix;
-			RuleFor(x => x).SetCollectionValidator(validator).OverridePropertyName(prefix);
+			return visitor;
 		}
 	}
 }

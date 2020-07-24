@@ -1,26 +1,28 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation {
 	using System;
 	using System.Collections;
 	using System.Collections.Generic;
+	using System.Linq;
 	using System.Linq.Expressions;
+	using System.Reflection;
 	using System.Text.RegularExpressions;
 	using System.Threading;
 	using System.Threading.Tasks;
@@ -32,8 +34,8 @@ namespace FluentValidation {
 	/// Extension methods that provide the default set of validators.
 	/// </summary>
 	public static class DefaultValidatorExtensions {
-    /// <summary>
-		/// Defines a 'not null' validator on the current rule builder. 
+		/// <summary>
+		/// Defines a 'not null' validator on the current rule builder.
 		/// Validation will fail if the property is null.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -43,10 +45,9 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> NotNull<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder) {
 			return ruleBuilder.SetValidator(new NotNullValidator());
 		}
-	
-		
+
 		/// <summary>
-		/// Defines a 'null' validator on the current rule builder. 
+		/// Defines a 'null' validator on the current rule builder.
 		/// Validation will fail if the property is not null.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -59,7 +60,7 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines a 'not empty' validator on the current rule builder.
-		/// Validation will fail if the property is null, an empty or the default value for the type (for example, 0 for integers)
+		/// Validation will fail if the property is null, an empty string, whitespace, an empty collection or the default value for the type (for example, 0 for integers but null for nullable integers)
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -69,7 +70,7 @@ namespace FluentValidation {
 			return ruleBuilder.SetValidator(new NotEmptyValidator(default(TProperty)));
 		}
 
-        /// <summary>
+		/// <summary>
 		/// Defines a 'empty' validator on the current rule builder.
 		/// Validation will fail if the property is not null, an empty or the default value for the type (for example, 0 for integers)
 		/// </summary>
@@ -83,7 +84,7 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines a length validator on the current rule builder, but only for string properties.
-		/// Validation will fail if the length of the string is outside of the specifed range. The range is inclusive.
+		/// Validation will fail if the length of the string is outside of the specified range. The range is inclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
@@ -96,15 +97,14 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines a length validator on the current rule builder, but only for string properties.
-		/// Validation will fail if the length of the string is outside of the specifed range. The range is inclusive.
+		/// Validation will fail if the length of the string is outside of the specified range. The range is inclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
 		/// <param name="min"></param>
 		/// <param name="max"></param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> Length<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, int> min, Func<T, int> max)
-		{
+		public static IRuleBuilderOptions<T, string> Length<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, int> min, Func<T, int> max) {
 			return ruleBuilder.SetValidator(new LengthValidator(min.CoerceToNonGeneric(), max.CoerceToNonGeneric()));
 		}
 
@@ -128,8 +128,7 @@ namespace FluentValidation {
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
 		/// <param name="exactLength"></param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> Length<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, int> exactLength)
-		{
+		public static IRuleBuilderOptions<T, string> Length<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, int> exactLength) {
 			return ruleBuilder.SetValidator(new ExactLengthValidator(exactLength.CoerceToNonGeneric()));
 		}
 
@@ -146,6 +145,30 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
+		/// Defines a length validator on the current rule builder, but only for string properties.
+		/// Validation will fail if the length of the string is larger than the length specified.
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="maximumLength"></param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, string> MaximumLength<T>(this IRuleBuilder<T, string> ruleBuilder, int maximumLength) {
+			return ruleBuilder.SetValidator(new MaximumLengthValidator(maximumLength));
+		}
+
+		/// <summary>
+		/// Defines a length validator on the current rule builder, but only for string properties.
+		/// Validation will fail if the length of the string is less than the length specified.
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="minimumLength"></param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, string> MinimumLength<T>(this IRuleBuilder<T, string> ruleBuilder, int minimumLength) {
+			return ruleBuilder.SetValidator(new MinimumLengthValidator(minimumLength));
+		}
+
+		/// <summary>
 		/// Defines a regular expression validator on the current rule builder, but only for string properties.
 		/// Validation will fail if the value returned by the lambda does not match the regular expression.
 		/// </summary>
@@ -153,11 +176,9 @@ namespace FluentValidation {
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
 		/// <param name="expression">The regular expression to check the value against.</param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, string> expression)
-		{
+		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, string> expression) {
 			return ruleBuilder.SetValidator(new RegularExpressionValidator(expression.CoerceToNonGeneric()));
 		}
-
 
 		/// <summary>
 		/// Defines a regular expression validator on the current rule builder, but only for string properties.
@@ -179,8 +200,7 @@ namespace FluentValidation {
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
 		/// <param name="regex">The regular expression to use</param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, Regex> regex)
-		{
+		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, Regex> regex) {
 			return ruleBuilder.SetValidator(new RegularExpressionValidator(regex.CoerceToNonGeneric()));
 		}
 
@@ -207,25 +227,27 @@ namespace FluentValidation {
 		/// <param name="expression">The regular expression to check the value against.</param>
 		/// <param name="options">Regex options</param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, string> expression, RegexOptions options)
-		{
+		public static IRuleBuilderOptions<T, string> Matches<T>(this IRuleBuilder<T, string> ruleBuilder, Func<T, string> expression, RegexOptions options) {
 			return ruleBuilder.SetValidator(new RegularExpressionValidator(expression.CoerceToNonGeneric(), options));
 		}
 
 		/// <summary>
-		/// Defines a regular expression validator on the current rule builder, but only for string properties.
+		/// Defines an email validator on the current rule builder for string properties.
 		/// Validation will fail if the value returned by the lambda is not a valid email address.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="mode">The mode to use for email validation. If set to <see cref="EmailValidationMode.Net4xRegex"/>, then a regular expression will be used. This is the same regex used by <see cref="System.ComponentModel.DataAnnotations.EmailAddressAttribute"/> in .NET 4.x. If set to <see cref="EmailValidationMode.AspNetCoreCompatible"/> then this uses the simplified ASP.NET Core logic for checking an email address, which just checks for the presence of an @ sign.</param>
 		/// <returns></returns>
-		public static IRuleBuilderOptions<T, string> EmailAddress<T>(this IRuleBuilder<T, string> ruleBuilder) {
-			return ruleBuilder.SetValidator(new EmailValidator());
+		public static IRuleBuilderOptions<T, string> EmailAddress<T>(this IRuleBuilder<T, string> ruleBuilder, EmailValidationMode mode = EmailValidationMode.AspNetCoreCompatible) {
+			var validator = mode == EmailValidationMode.AspNetCoreCompatible ? new AspNetCoreCompatibleEmailValidator() : (PropertyValidator)new EmailValidator();
+			return ruleBuilder.SetValidator(validator);
 		}
 
 		/// <summary>
 		/// Defines a 'not equal' validator on the current rule builder.
 		/// Validation will fail if the specified value is equal to the value of the property.
+		/// For strings, this performs an ordinal comparison unless you specify a different comparer.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -235,12 +257,16 @@ namespace FluentValidation {
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> NotEqual<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																			   TProperty toCompare, IEqualityComparer comparer = null) {
+			if (comparer == null && typeof(TProperty) == typeof(string)) {
+				comparer = StringComparer.Ordinal;
+			}
 			return ruleBuilder.SetValidator(new NotEqualValidator(toCompare, comparer));
 		}
-		
+
 		/// <summary>
 		/// Defines a 'not equal' validator on the current rule builder using a lambda to specify the value.
 		/// Validation will fail if the value returned by the lambda is equal to the value of the property.
+		/// For strings, this performs an ordinal comparison unless you specify a different comparer.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -250,13 +276,20 @@ namespace FluentValidation {
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> NotEqual<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																			   Expression<Func<T, TProperty>> expression, IEqualityComparer comparer = null) {
-			var func = expression.Compile();
-			return ruleBuilder.SetValidator(new NotEqualValidator(func.CoerceToNonGeneric(), expression.GetMember(), comparer));
+			if (comparer == null && typeof(TProperty) == typeof(string)) {
+				comparer = StringComparer.Ordinal;
+			}
+
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			string comparisonPropertyName = GetDisplayName(member, expression);
+			return ruleBuilder.SetValidator(new NotEqualValidator(func.CoerceToNonGeneric(), member, comparisonPropertyName, comparer));
 		}
 
 		/// <summary>
-		/// Defines an 'equals' validator on the current rule builder. 
+		/// Defines an 'equals' validator on the current rule builder.
 		/// Validation will fail if the specified value is not equal to the value of the property.
+		/// For strings, this performs an ordinal comparison unless you specify a different comparer.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -265,12 +298,16 @@ namespace FluentValidation {
 		/// <param name="comparer">Equality Comparer to use</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> Equal<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, TProperty toCompare, IEqualityComparer comparer = null) {
+			if (comparer == null && typeof(TProperty) == typeof(string)) {
+				comparer = StringComparer.Ordinal;
+			}
 			return ruleBuilder.SetValidator(new EqualValidator(toCompare, comparer));
 		}
 
 		/// <summary>
 		/// Defines an 'equals' validator on the current rule builder using a lambda to specify the comparison value.
 		/// Validation will fail if the value returned by the lambda is not equal to the value of the property.
+		/// For strings, this performs an ordinal comparison unless you specify a different comparer.
 		/// </summary>
 		/// <typeparam name="T">The type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -279,14 +316,20 @@ namespace FluentValidation {
 		/// <param name="comparer">Equality comparer to use</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> Equal<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Expression<Func<T, TProperty>> expression, IEqualityComparer comparer = null) {
-			var func = expression.Compile();
-			return ruleBuilder.SetValidator(new EqualValidator(func.CoerceToNonGeneric(), expression.GetMember(), comparer));
+			if (comparer == null && typeof(TProperty) == typeof(string)) {
+				comparer = StringComparer.Ordinal;
+			}
+
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
+			return ruleBuilder.SetValidator(new EqualValidator(func.CoerceToNonGeneric(), member, name, comparer));
 		}
 
 		/// <summary>
 		/// Defines a predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -294,15 +337,14 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> Must<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<TProperty, bool> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
-
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 			return ruleBuilder.Must((x, val) => predicate(val));
 		}
 
 		/// <summary>
 		/// Defines a predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// This overload accepts the object being validated in addition to the property being validated.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -311,14 +353,14 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> Must<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<T, TProperty, bool> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 			return ruleBuilder.Must((x, val, propertyValidatorContext) => predicate(x, val));
 		}
 
 		/// <summary>
 		/// Defines a predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// This overload accepts the object being validated in addition to the property being validated.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -327,14 +369,14 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> Must<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<T, TProperty, PropertyValidatorContext, bool> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 			return ruleBuilder.SetValidator(new PredicateValidator((instance, property, propertyValidatorContext) => predicate((T) instance, (TProperty) property, propertyValidatorContext)));
 		}
 
 		/// <summary>
 		/// Defines an asynchronous predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -342,7 +384,7 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> MustAsync<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<TProperty, CancellationToken, Task<bool>> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 
 			return ruleBuilder.MustAsync((x, val, ctx, cancel) => predicate(val, cancel));
 		}
@@ -350,7 +392,7 @@ namespace FluentValidation {
 		/// <summary>
 		/// Defines an asynchronous predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// This overload accepts the object being validated in addition to the property being validated.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -359,14 +401,14 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> MustAsync<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<T, TProperty, CancellationToken, Task<bool>> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 			return ruleBuilder.MustAsync((x, val, propertyValidatorContext, cancel) => predicate(x, val, cancel));
 		}
 
 		/// <summary>
 		/// Defines an asynchronous predicate validator on the current rule builder using a lambda expression to specify the predicate.
 		/// Validation will fail if the specified lambda returns false.
-		/// Validation will succeed if the specifed lambda returns true.
+		/// Validation will succeed if the specified lambda returns true.
 		/// This overload accepts the object being validated in addition to the property being validated.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
@@ -375,12 +417,12 @@ namespace FluentValidation {
 		/// <param name="predicate">A lambda expression specifying the predicate</param>
 		/// <returns></returns>
 		public static IRuleBuilderOptions<T, TProperty> MustAsync<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<T, TProperty, PropertyValidatorContext, CancellationToken, Task<bool>> predicate) {
-			predicate.Guard("Cannot pass a null predicate to Must.");
+			predicate.Guard("Cannot pass a null predicate to Must.", nameof(predicate));
 			return ruleBuilder.SetValidator(new AsyncPredicateValidator((instance, property, propertyValidatorContext, cancel) => predicate((T) instance, (TProperty) property, propertyValidatorContext, cancel)));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder. 
+		/// Defines a 'less than' validator on the current rule builder.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -396,7 +438,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder. 
+		/// Defines a 'less than' validator on the current rule builder.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -412,7 +454,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'less than or equal' validator on the current rule builder. 
+		/// Defines a 'less than or equal' validator on the current rule builder.
 		/// The validation will succeed if the property value is less than or equal to the specified value.
 		/// The validation will fail if the property value is greater than the specified value.
 		/// </summary>
@@ -427,7 +469,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'less than or equal' validator on the current rule builder. 
+		/// Defines a 'less than or equal' validator on the current rule builder.
 		/// The validation will succeed if the property value is less than or equal to the specified value.
 		/// The validation will fail if the property value is greater than the specified value.
 		/// </summary>
@@ -442,7 +484,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'greater than' validator on the current rule builder. 
+		/// Defines a 'greater than' validator on the current rule builder.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -457,7 +499,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'greater than' validator on the current rule builder. 
+		/// Defines a 'greater than' validator on the current rule builder.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -472,7 +514,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'greater than or equal' validator on the current rule builder. 
+		/// Defines a 'greater than or equal' validator on the current rule builder.
 		/// The validation will succeed if the property value is greater than or equal the specified value.
 		/// The validation will fail if the property value is less than the specified value.
 		/// </summary>
@@ -487,7 +529,7 @@ namespace FluentValidation {
 		}
 
 		/// <summary>
-		/// Defines a 'greater than or equal' validator on the current rule builder. 
+		/// Defines a 'greater than or equal' validator on the current rule builder.
 		/// The validation will succeed if the property value is greater than or equal the specified value.
 		/// The validation will fail if the property value is less than the specified value.
 		/// </summary>
@@ -503,7 +545,7 @@ namespace FluentValidation {
 
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -515,15 +557,16 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> LessThan<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																			   Expression<Func<T, TProperty>> expression)
 			where TProperty : IComparable<TProperty>, IComparable {
-			expression.Guard("Cannot pass null to LessThan");
+			expression.Guard("Cannot pass null to LessThan", nameof(expression));
 
-			var func = expression.Compile();
-
-			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
+			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -535,15 +578,17 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> LessThan<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																			   Expression<Func<T, Nullable<TProperty>>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			expression.Guard("Cannot pass null to LessThan");
+			expression.Guard("Cannot pass null to LessThan", nameof(expression));
 
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -555,15 +600,17 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, Nullable<TProperty>> LessThan<T, TProperty>(this IRuleBuilder<T, Nullable<TProperty>> ruleBuilder,
 																						 Expression<Func<T, TProperty>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			expression.Guard("Cannot pass null to LessThan");
+			expression.Guard("Cannot pass null to LessThan", nameof(expression));
 
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than the specified value.
 		/// The validation will fail if the property value is greater than or equal to the specified value.
 		/// </summary>
@@ -575,15 +622,17 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, Nullable<TProperty>> LessThan<T, TProperty>(this IRuleBuilder<T, Nullable<TProperty>> ruleBuilder,
 																						 Expression<Func<T, Nullable<TProperty>>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			expression.Guard("Cannot pass null to LessThan");
+			expression.Guard("Cannot pass null to LessThan", nameof(expression));
 
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than or equal to the specified value.
 		/// The validation will fail if the property value is greater than the specified value.
 		/// </summary>
@@ -595,13 +644,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> LessThanOrEqualTo<T, TProperty>(
 			this IRuleBuilder<T, TProperty> ruleBuilder, Expression<Func<T, TProperty>> expression)
 			where TProperty : IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than or equal to the specified value.
 		/// The validation will fail if the property value is greater than the specified value.
 		/// </summary>
@@ -613,13 +664,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> LessThanOrEqualTo<T, TProperty>(
 			this IRuleBuilder<T, TProperty> ruleBuilder, Expression<Func<T, Nullable<TProperty>>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is less than or equal to the specified value.
 		/// The validation will fail if the property value is greater than the specified value.
 		/// </summary>
@@ -631,31 +684,35 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, Nullable<TProperty>> LessThanOrEqualTo<T, TProperty>(
 			this IRuleBuilder<T, Nullable<TProperty>> ruleBuilder, Expression<Func<T, TProperty>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
-	/// <summary>
-	/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression. 
-	/// The validation will succeed if the property value is less than or equal to the specified value.
-	/// The validation will fail if the property value is greater than the specified value.
-	/// </summary>
-	/// <typeparam name="T">Type of object being validated</typeparam>
-	/// <typeparam name="TProperty">Type of property being validated</typeparam>
-	/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
-	/// <param name="expression">The value being compared</param>
-	/// <returns></returns>
-	public static IRuleBuilderOptions<T, TProperty?> LessThanOrEqualTo<T, TProperty>(
-	  this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty?>> expression)
-	  where TProperty : struct, IComparable<TProperty>, IComparable {
-	  var func = expression.Compile();
+		/// <summary>
+		/// Defines a 'less than or equal' validator on the current rule builder using a lambda expression.
+		/// The validation will succeed if the property value is less than or equal to the specified value.
+		/// The validation will fail if the property value is greater than the specified value.
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <typeparam name="TProperty">Type of property being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="expression">The value being compared</param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, TProperty?> LessThanOrEqualTo<T, TProperty>(
+		  this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty?>> expression)
+		  where TProperty : struct, IComparable<TProperty>, IComparable {
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-	  return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), expression.GetMember()));
-	}
+			return ruleBuilder.SetValidator(new LessThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
+		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -667,13 +724,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> GreaterThan<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																				  Expression<Func<T, TProperty>> expression)
 			where TProperty : IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -685,13 +744,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> GreaterThan<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder,
 																				  Expression<Func<T, Nullable<TProperty>>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -703,13 +764,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, Nullable<TProperty>> GreaterThan<T, TProperty>(this IRuleBuilder<T, Nullable<TProperty>> ruleBuilder,
 																				  Expression<Func<T, TProperty>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'less than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'less than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than the specified value.
 		/// The validation will fail if the property value is less than or equal to the specified value.
 		/// </summary>
@@ -721,13 +784,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, Nullable<TProperty>> GreaterThan<T, TProperty>(this IRuleBuilder<T, Nullable<TProperty>> ruleBuilder,
 																				  Expression<Func<T, Nullable<TProperty>>> expression)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = expression.Compile();
+			var member = expression.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, expression);
+			var name = GetDisplayName(member, expression);
 
-			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), expression.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'greater than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'greater than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than or equal the specified value.
 		/// The validation will fail if the property value is less than the specified value.
 		/// </summary>
@@ -739,13 +804,15 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> GreaterThanOrEqualTo<T, TProperty>(
 			this IRuleBuilder<T, TProperty> ruleBuilder, Expression<Func<T, TProperty>> valueToCompare)
 			where TProperty : IComparable<TProperty>, IComparable {
-			var func = valueToCompare.Compile();
+			var member = valueToCompare.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, valueToCompare);
+			var name = GetDisplayName(member, valueToCompare);
 
-			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), valueToCompare.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
 		/// <summary>
-		/// Defines a 'greater than' validator on the current rule builder using a lambda expression. 
+		/// Defines a 'greater than' validator on the current rule builder using a lambda expression.
 		/// The validation will succeed if the property value is greater than or equal the specified value.
 		/// The validation will fail if the property value is less than the specified value.
 		/// </summary>
@@ -757,46 +824,51 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> GreaterThanOrEqualTo<T, TProperty>(
 			this IRuleBuilder<T, TProperty> ruleBuilder, Expression<Func<T, Nullable<TProperty>>> valueToCompare)
 			where TProperty : struct, IComparable<TProperty>, IComparable {
-			var func = valueToCompare.Compile();
+			var member = valueToCompare.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, valueToCompare);
+			var name = GetDisplayName(member, valueToCompare);
 
-			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), valueToCompare.GetMember()));
+			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
 		}
 
-	/// <summary>
-	/// Defines a 'greater than or equal to' validator on the current rule builder using a lambda expression. 
-	/// The validation will succeed if the property value is greater than or equal the specified value.
-	/// The validation will fail if the property value is less than the specified value.
-	/// </summary>
-	/// <typeparam name="T">Type of object being validated</typeparam>
-	/// <typeparam name="TProperty">Type of property being validated</typeparam>
-	/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
-	/// <param name="valueToCompare">The value being compared</param>
-	/// <returns></returns>
-	public static IRuleBuilderOptions<T, TProperty?> GreaterThanOrEqualTo<T, TProperty>(this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty?>> valueToCompare) 
-	  where TProperty : struct, IComparable<TProperty>, IComparable
-	{
-	  var func = valueToCompare.Compile();
-	  return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), valueToCompare.GetMember()));
-	}
+		/// <summary>
+		/// Defines a 'greater than or equal to' validator on the current rule builder using a lambda expression.
+		/// The validation will succeed if the property value is greater than or equal the specified value.
+		/// The validation will fail if the property value is less than the specified value.
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <typeparam name="TProperty">Type of property being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="valueToCompare">The value being compared</param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, TProperty?> GreaterThanOrEqualTo<T, TProperty>(this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty?>> valueToCompare)
+		  where TProperty : struct, IComparable<TProperty>, IComparable {
+			var member = valueToCompare.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, valueToCompare);
+			var name = GetDisplayName(member, valueToCompare);
 
-	/// <summary>
-	/// Defines a 'greater than or equal to' validator on the current rule builder using a lambda expression. 
-	/// The validation will succeed if the property value is greater than or equal the specified value.
-	/// The validation will fail if the property value is less than the specified value.
-	/// </summary>
-	/// <typeparam name="T">Type of object being validated</typeparam>
-	/// <typeparam name="TProperty">Type of property being validated</typeparam>
-	/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
-	/// <param name="valueToCompare">The value being compared</param>
-	/// <returns></returns>
-	public static IRuleBuilderOptions<T, TProperty?> GreaterThanOrEqualTo<T, TProperty>(
-	  this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty>> valueToCompare)
-	  where TProperty : struct, IComparable<TProperty>, IComparable
-	{
-	  var func = valueToCompare.Compile();
+			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
+		}
 
-	  return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), valueToCompare.GetMember()));
-	}
+		/// <summary>
+		/// Defines a 'greater than or equal to' validator on the current rule builder using a lambda expression.
+		/// The validation will succeed if the property value is greater than or equal the specified value.
+		/// The validation will fail if the property value is less than the specified value.
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <typeparam name="TProperty">Type of property being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="valueToCompare">The value being compared</param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, TProperty?> GreaterThanOrEqualTo<T, TProperty>(
+		  this IRuleBuilder<T, TProperty?> ruleBuilder, Expression<Func<T, TProperty>> valueToCompare)
+		  where TProperty : struct, IComparable<TProperty>, IComparable {
+			var member = valueToCompare.GetMember();
+			var func = AccessorCache<T>.GetCachedAccessor(member, valueToCompare);
+			var name = GetDisplayName(member, valueToCompare);
+
+			return ruleBuilder.SetValidator(new GreaterThanOrEqualValidator(func.CoerceToNonGeneric(), member, name));
+		}
 
 		/// <summary>
 		/// Validates certain properties of the specified instance.
@@ -833,18 +905,20 @@ namespace FluentValidation {
 		/// <param name="ruleSet"></param>
 		/// <returns></returns>
 		public static ValidationResult Validate<T>(this IValidator<T> validator, T instance, IValidatorSelector selector = null, string ruleSet = null) {
-			if(selector != null && ruleSet != null) {
+			if (selector != null && ruleSet != null) {
 				throw new InvalidOperationException("Cannot specify both an IValidatorSelector and a RuleSet.");
 			}
-			
-			if(selector == null) {
+
+			if (selector == null) {
 				selector = ValidatorOptions.ValidatorSelectors.DefaultValidatorSelectorFactory();
 			}
-			
-			if(ruleSet != null) {
-				var ruleSetNames = ruleSet.Split(',', ';');
+
+			if (ruleSet != null) {
+				var ruleSetNames = ruleSet.Split(',', ';')
+					.Select(x => x.Trim())
+					.ToArray();
 				selector = ValidatorOptions.ValidatorSelectors.RulesetValidatorSelectorFactory(ruleSetNames);
-			} 
+			}
 
 			var context = new ValidationContext<T>(instance, new PropertyChain(), selector);
 			return validator.Validate(context);
@@ -855,12 +929,13 @@ namespace FluentValidation {
 		/// </summary>
 		/// <param name="validator">The current validator</param>
 		/// <param name="instance">The object to validate</param>
+		/// <param name="cancellationToken"></param>
 		/// <param name="propertyExpressions">Expressions to specify the properties to validate</param>
 		/// <returns>A ValidationResult object containing any validation failures</returns>
-		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, params Expression<Func<T, object>>[] propertyExpressions) {
+		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, CancellationToken cancellationToken = default, params Expression<Func<T, object>>[] propertyExpressions) {
 			var selector = ValidatorOptions.ValidatorSelectors.MemberNameValidatorSelectorFactory(MemberNameValidatorSelector.MemberNamesFromExpressions(propertyExpressions));
 			var context = new ValidationContext<T>(instance, new PropertyChain(), selector);
-			return validator.ValidateAsync(context);
+			return validator.ValidateAsync(context, cancellationToken);
 		}
 
 		/// <summary>
@@ -868,23 +943,25 @@ namespace FluentValidation {
 		/// </summary>
 		/// <param name="validator"></param>
 		/// <param name="instance">The object to validate</param>
+		/// <param name="cancellationToken"></param>
 		/// <param name="properties">The names of the properties to validate.</param>
 		/// <returns>A ValidationResult object containing any validation failures.</returns>
-		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, params string[] properties) {
+		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, CancellationToken cancellationToken = default, params string[] properties) {
 			var context = new ValidationContext<T>(instance, new PropertyChain(), ValidatorOptions.ValidatorSelectors.MemberNameValidatorSelectorFactory(properties));
-			return validator.ValidateAsync(context);
+			return validator.ValidateAsync(context, cancellationToken);
 		}
 
 		/// <summary>
-		/// Validates an object asynchronously using a custom valdiator selector or a ruleset
+		/// Validates an object asynchronously using a custom validator selector or a ruleset
 		/// </summary>
 		/// <typeparam name="T"></typeparam>
 		/// <param name="validator"></param>
 		/// <param name="instance"></param>
+		/// <param name="cancellationToken"></param>
 		/// <param name="selector"></param>
 		/// <param name="ruleSet"></param>
 		/// <returns></returns>
-		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, IValidatorSelector selector = null, string ruleSet = null) {
+		public static Task<ValidationResult> ValidateAsync<T>(this IValidator<T> validator, T instance, CancellationToken cancellationToken = default, IValidatorSelector selector = null, string ruleSet = null) {
 			if (selector != null && ruleSet != null) {
 				throw new InvalidOperationException("Cannot specify both an IValidatorSelector and a RuleSet.");
 			}
@@ -894,12 +971,14 @@ namespace FluentValidation {
 			}
 
 			if (ruleSet != null) {
-				var ruleSetNames = ruleSet.Split(',', ';');
+				var ruleSetNames = ruleSet.Split(',', ';')
+					.Select(x => x.Trim())
+					.ToArray();
 				selector = ValidatorOptions.ValidatorSelectors.RulesetValidatorSelectorFactory(ruleSetNames);
 			}
 
 			var context = new ValidationContext<T>(instance, new PropertyChain(), selector);
-			return validator.ValidateAsync(context);
+			return validator.ValidateAsync(context, cancellationToken);
 		}
 
 		/// <summary>
@@ -921,17 +1000,18 @@ namespace FluentValidation {
 		/// </summary>
 		/// <param name="validator">The validator this method is extending.</param>
 		/// <param name="instance">The instance of the type we are validating.</param>
+		/// <param name="cancellationToken"></param>
 		/// <param name="ruleSet">Optional: a ruleset when need to validate against.</param>
-		public static async Task ValidateAndThrowAsync<T>(this IValidator<T> validator, T instance, string ruleSet = null) {
-			var result = await validator.ValidateAsync(instance, ruleSet: ruleSet);
+		public static async Task ValidateAndThrowAsync<T>(this IValidator<T> validator, T instance, string ruleSet = null, CancellationToken cancellationToken = default) {
+			var result = await validator.ValidateAsync(instance, cancellationToken, ruleSet: ruleSet);
 			if (!result.IsValid) {
 				throw new ValidationException(result.Errors);
 			}
 		}
 
-	    /// <summary>
+		/// <summary>
 		/// Defines an 'inclusive between' validator on the current rule builder, but only for properties of types that implement IComparable.
-		/// Validation will fail if the value of the property is outside of the specifed range. The range is inclusive.
+		/// Validation will fail if the value of the property is outside of the specified range. The range is inclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -945,7 +1025,7 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines an 'inclusive between' validator on the current rule builder, but only for properties of types that implement IComparable.
-		/// Validation will fail if the value of the property is outside of the specifed range. The range is inclusive.
+		/// Validation will fail if the value of the property is outside of the specified range. The range is inclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -959,7 +1039,7 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines an 'exclusive between' validator on the current rule builder, but only for properties of types that implement IComparable.
-		/// Validation will fail if the value of the property is outside of the specifed range. The range is exclusive.
+		/// Validation will fail if the value of the property is outside of the specified range. The range is exclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -973,7 +1053,7 @@ namespace FluentValidation {
 
 		/// <summary>
 		/// Defines an 'exclusive between' validator on the current rule builder, but only for properties of types that implement IComparable.
-		/// Validation will fail if the value of the property is outside of the specifed range. The range is exclusive.
+		/// Validation will fail if the value of the property is outside of the specified range. The range is exclusive.
 		/// </summary>
 		/// <typeparam name="T">Type of object being validated</typeparam>
 		/// <typeparam name="TProperty">Type of property being validated</typeparam>
@@ -988,7 +1068,7 @@ namespace FluentValidation {
 		/// <summary>
 		/// Defines a credit card validator for the current rule builder that ensures that the specified string is a valid credit card number.
 		/// </summary>
-		public static IRuleBuilderOptions<T,string> CreditCard<T>(this IRuleBuilder<T, string> ruleBuilder) {
+		public static IRuleBuilderOptions<T, string> CreditCard<T>(this IRuleBuilder<T, string> ruleBuilder) {
 			return ruleBuilder.SetValidator(new CreditCardValidator());
 		}
 
@@ -1002,5 +1082,90 @@ namespace FluentValidation {
 		public static IRuleBuilderOptions<T, TProperty> IsInEnum<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder) {
 			return ruleBuilder.SetValidator(new EnumValidator(typeof(TProperty)));
 		}
-    }
+
+		/// <summary>
+		/// Defines a scale precision validator on the current rule builder that ensures that the specific value has a certain scale and precision
+		/// </summary>
+		/// <typeparam name="T">Type of object being validated</typeparam>
+		/// <typeparam name="TProperty">Type of property being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="scale">Allowed scale of the value</param>
+		/// <param name="precision">Allowed precision of the value</param>
+		/// <param name="ignoreTrailingZeros">Whether the validator will ignore trailing zeros.</param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, TProperty> ScalePrecision<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, int scale, int precision, bool ignoreTrailingZeros = false) {
+			return ruleBuilder.SetValidator(new ScalePrecisionValidator(scale, precision) { IgnoreTrailingZeros = ignoreTrailingZeros });
+		}
+
+		/// <summary>
+		/// Defines a custom validation rule
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <typeparam name="TProperty"></typeparam>
+		/// <param name="ruleBuilder"></param>
+		/// <param name="action"></param>
+		/// <returns></returns>
+		public static IRuleBuilderInitial<T, TProperty> Custom<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Action<TProperty, CustomContext> action) {
+			return (IRuleBuilderInitial<T, TProperty>) ruleBuilder.SetValidator(new CustomValidator<TProperty>(action));
+		}
+
+		/// <summary>
+		/// Defines a custom validation rule
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <typeparam name="TProperty"></typeparam>
+		/// <param name="ruleBuilder"></param>
+		/// <param name="action"></param>
+		/// <returns></returns>
+		public static IRuleBuilderInitial<T, TProperty> CustomAsync<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Func<TProperty, CustomContext, CancellationToken, Task> action) {
+			return (IRuleBuilderInitial<T, TProperty>) ruleBuilder.SetValidator(new CustomValidator<TProperty>(action));
+		}
+
+		/// <summary>
+		/// Allows rules to be built against individual elements in the collection.
+		/// </summary>
+		/// <param name="ruleBuilder"></param>
+		/// <param name="action"></param>
+		/// <typeparam name="T"></typeparam>
+		/// <typeparam name="TElement"></typeparam>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, IEnumerable<TElement>> ForEach<T, TElement>(this IRuleBuilder<T, IEnumerable<TElement>> ruleBuilder,
+			Action<IRuleBuilderInitialCollection<IEnumerable<TElement>, TElement>> action) {
+			var innerValidator = new InlineValidator<IEnumerable<TElement>>();
+			action(innerValidator.RuleForEach(x => x));
+			return ruleBuilder.SetValidator(innerValidator);
+		}
+
+		/// <summary>
+		/// Defines a enum value validator on the current rule builder that ensures that the specific value is a valid enum name.
+		/// </summary>
+		/// <typeparam name="T">Type of Enum being validated</typeparam>
+		/// <param name="ruleBuilder">The rule builder on which the validator should be defined</param>
+		/// <param name="enumType">The enum whose the string should match any name</param>
+		/// <param name="caseSensitive">If the comparison between the string and the enum names should be case sensitive</param>
+		/// <returns></returns>
+		public static IRuleBuilderOptions<T, string> IsEnumName<T>(this IRuleBuilder<T, string> ruleBuilder, Type enumType, bool caseSensitive = true) {
+			return ruleBuilder.SetValidator(new StringEnumValidator(enumType, caseSensitive));
+		}
+
+		/// <summary>
+		/// Defines child rules for a nested property.
+		/// </summary>
+		/// <param name="ruleBuilder">The rule builder.</param>
+		/// <param name="action">Callback that will be invoked to build the rules.</param>
+		/// <typeparam name="T"></typeparam>
+		/// <typeparam name="TProperty"></typeparam>
+		/// <returns></returns>
+		/// <exception cref="ArgumentNullException"></exception>
+		public static IRuleBuilderOptions<T, TProperty> ChildRules<T, TProperty>(this IRuleBuilder<T, TProperty> ruleBuilder, Action<InlineValidator<TProperty>> action) {
+			if (action == null) throw new ArgumentNullException(nameof(action));
+			var validator = new InlineValidator<TProperty>();
+			action(validator);
+			return ruleBuilder.SetValidator(validator);
+		}
+
+		private static string GetDisplayName<T, TProperty>(MemberInfo member, Expression<Func<T, TProperty>> expression) {
+			return ValidatorOptions.Global.DisplayNameResolver(typeof(T), member, expression) ?? member?.Name.SplitPascalCase();
+		}
+	}
 }

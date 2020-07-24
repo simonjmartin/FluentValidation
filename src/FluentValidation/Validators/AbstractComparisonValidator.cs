@@ -1,55 +1,54 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Validators {
 	using System;
-	using System.Linq.Expressions;
 	using System.Reflection;
-	using Attributes;
 	using Internal;
-	using Results;
+	using Resources;
 
 	/// <summary>
 	/// Base class for all comparison validators
 	/// </summary>
 	public abstract class AbstractComparisonValidator : PropertyValidator, IComparisonValidator {
 
-		readonly Func<object, object> valueToCompareFunc;
+		readonly Func<object, object> _valueToCompareFunc;
+		private readonly string _comparisonMemberDisplayName;
 
 		/// <summary>
 		/// </summary>
 		/// <param name="value"></param>
-		/// <param name="resourceName"></param>
-		/// <param name="resourceType"></param>
-		protected AbstractComparisonValidator(IComparable value, string resourceName, Type resourceType) : base(resourceName, resourceType) {
-			value.Guard("value must not be null.");
+		/// <param name="errorSource"></param>
+		protected AbstractComparisonValidator(IComparable value, IStringSource errorSource) : base(errorSource) {
+			value.Guard("value must not be null.", nameof(value));
 			ValueToCompare = value;
 		}
+
 		/// <summary>
 		/// </summary>
 		/// <param name="valueToCompareFunc"></param>
 		/// <param name="member"></param>
-		/// <param name="resourceName"></param>
-		/// <param name="resourceType"></param>
-		protected AbstractComparisonValidator(Func<object, object> valueToCompareFunc, MemberInfo member, string resourceName, Type resourceType)
-			: base(resourceName, resourceType) {
-			this.valueToCompareFunc = valueToCompareFunc;
+		/// <param name="memberDisplayName"></param>
+		/// <param name="errorSource"></param>
+		protected AbstractComparisonValidator(Func<object, object> valueToCompareFunc, MemberInfo member, string memberDisplayName, IStringSource errorSource) : base(errorSource) {
+			this._valueToCompareFunc = valueToCompareFunc;
 			this.MemberToCompare = member;
+			_comparisonMemberDisplayName = memberDisplayName;
 		}
 
 		/// <summary>
@@ -60,23 +59,24 @@ namespace FluentValidation.Validators {
 		protected sealed override bool IsValid(PropertyValidatorContext context) {
 			if(context.PropertyValue == null) {
 				// If we're working with a nullable type then this rule should not be applied.
-				// If you want to ensure that it's never null then a NotNull rule should also be applied. 
+				// If you want to ensure that it's never null then a NotNull rule should also be applied.
 				return true;
 			}
-			
+
 			var value = GetComparisonValue(context);
 
 			if (!IsValid((IComparable)context.PropertyValue, value)) {
 				context.MessageFormatter.AppendArgument("ComparisonValue", value);
+				context.MessageFormatter.AppendArgument("ComparisonProperty", _comparisonMemberDisplayName ?? "");
 				return false;
 			}
 
 			return true;
 		}
 
-		private IComparable GetComparisonValue(PropertyValidatorContext context) {
-			if(valueToCompareFunc != null) {
-				return (IComparable)valueToCompareFunc(context.Instance);
+		public IComparable GetComparisonValue(PropertyValidatorContext context) {
+			if(_valueToCompareFunc != null) {
+				return (IComparable)_valueToCompareFunc(context.InstanceToValidate);
 			}
 
 			return (IComparable)ValueToCompare;

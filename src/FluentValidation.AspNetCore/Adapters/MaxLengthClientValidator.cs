@@ -1,32 +1,62 @@
-﻿namespace FluentValidation.AspNetCore {
+﻿#region License
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
+#endregion
+namespace FluentValidation.AspNetCore {
     using Internal;
     using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
     using Resources;
     using Validators;
 
-    internal class MaxLengthClientValidator : AbstractComparisonClientValidator<LessThanOrEqualValidator> {
-		protected override object MinValue
-		{
-			get { return null; }
-		}
+    internal class MaxLengthClientValidator : ClientValidatorBase {
+	    public override void AddValidation(ClientModelValidationContext context) {
+		    var lengthVal = (MaximumLengthValidator)Validator;
 
-		protected override object MaxValue
-		{
-			get { return AbstractComparisonValidator.ValueToCompare; }
-		}
+		    MergeAttribute(context.Attributes, "data-val", "true");
+		    MergeAttribute(context.Attributes, "data-val-maxlength", GetErrorMessage(lengthVal, context));
+		    MergeAttribute(context.Attributes, "data-val-maxlength-max", lengthVal.Max.ToString());
+	    }
 
-		public MaxLengthClientValidator(PropertyRule rule, IPropertyValidator validator)
-            : base(rule, validator) {
-		}
+	    private string GetErrorMessage(LengthValidator lengthVal, ClientModelValidationContext context) {
+				var cfg = context.ActionContext.HttpContext.RequestServices.GetValidatorConfiguration();
 
-		public override void AddValidation(ClientModelValidationContext context) {
-			MergeAttribute(context.Attributes, "data-val", "true");
-			MergeAttribute(context.Attributes, "data-val-minlength", GetErrorMessage(context));
-			MergeAttribute(context.Attributes, "data-val-minlength-max", MaxValue.ToString());
-		}
+		    var formatter = cfg.MessageFormatterFactory()
+			    .AppendPropertyName(Rule.GetDisplayName())
+			    .AppendArgument("MinLength", lengthVal.Min)
+			    .AppendArgument("MaxLength", lengthVal.Max);
 
-	    protected override string GetDefaultMessage() {
-			return Messages.lessthanorequal_error;
-		}
-    }
+		    bool needsSimplifiedMessage = lengthVal.Options.ErrorMessageSource is LanguageStringSource;
+
+		    string message;
+		    try {
+			    message = lengthVal.Options.ErrorMessageSource.GetString(null);
+		    } catch (FluentValidationMessageFormatException) {
+			    message = cfg.LanguageManager.GetString("MaximumLength_Simple");
+			    needsSimplifiedMessage = false;
+		    }
+
+		    if (needsSimplifiedMessage && message.Contains("{TotalLength}")) {
+			    message = cfg.LanguageManager.GetString("MaximumLength_Simple");
+		    }
+
+		    message = formatter.BuildMessage(message);
+		    return message;
+	    }
+
+	    public MaxLengthClientValidator(PropertyRule rule, IPropertyValidator validator) : base(rule, validator) {
+	    }
+	}
 }

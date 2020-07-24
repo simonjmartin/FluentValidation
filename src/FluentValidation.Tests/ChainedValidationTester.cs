@@ -1,19 +1,19 @@
 ﻿#region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Tests {
@@ -22,7 +22,7 @@ namespace FluentValidation.Tests {
 	using System.Linq;
 	using Xunit;
 
-	
+
 	public class ChainedValidationTester {
 		PersonValidator validator;
 		Person person;
@@ -35,7 +35,7 @@ namespace FluentValidation.Tests {
 				},
 				Orders = new List<Order> {
 					new Order() { Amount = 5 },
-					new Order() { ProductName = "Foo" }    	
+					new Order() { ProductName = "Foo" }
 				}
 			};
 		}
@@ -64,7 +64,7 @@ namespace FluentValidation.Tests {
 		}
 
 		[Fact]
-		public void Explicitly_included_properties_should_be_propogated_to_nested_validators() {
+		public void Explicitly_included_properties_should_be_propagated_to_nested_validators() {
 			var results = validator.Validate(person, x => x.Address);
 			results.Errors.Count.ShouldEqual(2);
 			results.Errors.First().PropertyName.ShouldEqual("Address.Postcode");
@@ -72,7 +72,7 @@ namespace FluentValidation.Tests {
 		}
 
 		[Fact]
-		public void Explicitly_included_properties_should_be_propogated_to_nested_validators_using_strings() {
+		public void Explicitly_included_properties_should_be_propagated_to_nested_validators_using_strings() {
 			var results = validator.Validate(person, "Address");
 			results.Errors.Count.ShouldEqual(2);
 			results.Errors.First().PropertyName.ShouldEqual("Address.Postcode");
@@ -104,7 +104,7 @@ namespace FluentValidation.Tests {
 			};
 
 			var validator = new TestValidator {
-				v => v.RuleFor(x => x.Address).SetValidator(addressValidator)	
+				v => v.RuleFor(x => x.Address).SetValidator(addressValidator)
 			};
 
 			var result = validator.Validate(new Person { Address = new Address() });
@@ -161,6 +161,21 @@ namespace FluentValidation.Tests {
 			members[3].Key.ShouldEqual("Address.Line1");
 		}
 
+		[Fact]
+		public void Uses_explicit_ruleset() {
+			var addressValidator = new InlineValidator<Address>();
+			addressValidator.RuleSet("ruleset1", () => {
+				addressValidator.RuleFor(x => x.Line1).NotNull();
+			});
+			addressValidator.RuleFor(x => x.Line2).NotNull();
+			var validator = new InlineValidator<Person>();
+			validator.RuleFor(x => x.Address).SetValidator(addressValidator, ruleSets: "ruleset1");
+
+			var result = validator.Validate(new Person {Address = new Address()});
+			result.Errors.Count.ShouldEqual(1);
+			result.Errors[0].PropertyName.ShouldEqual("Address.Line1");
+		}
+
 		public class DepartmentValidator : AbstractValidator<Department> {
 			public DepartmentValidator() {
 				CascadeMode = CascadeMode.StopOnFirstFailure; ;
@@ -185,6 +200,6 @@ namespace FluentValidation.Tests {
 			public Person Assistant { get; set; }
 			public IList<Person> Employees { get; set; }
 		}
-	
+
 	}
 }

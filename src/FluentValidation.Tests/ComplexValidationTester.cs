@@ -1,29 +1,31 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Tests {
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
+	using System.Threading;
 	using System.Threading.Tasks;
+	using Results;
 	using Xunit;
 
-	
+
 	public class ComplexValidationTester {
 		PersonValidator validator;
 		Person person;
@@ -36,7 +38,7 @@ namespace FluentValidation.Tests {
 				},
 				Orders = new List<Order> {
 					new Order() { Amount = 5 },
-                    new Order() { ProductName = "Foo" }    	
+                    new Order() { ProductName = "Foo" }
                 }
 			};
 		}
@@ -77,7 +79,7 @@ namespace FluentValidation.Tests {
 		}
 
 		[Fact]
-		public void Explicitly_included_properties_should_be_propogated_to_nested_validators() {
+		public void Explicitly_included_properties_should_be_propagated_to_nested_validators() {
 			var results = validator.Validate(person, x => x.Address);
 			results.Errors.Count.ShouldEqual(2);
 			results.Errors.First().PropertyName.ShouldEqual("Address.Postcode");
@@ -85,7 +87,7 @@ namespace FluentValidation.Tests {
 		}
 
 		[Fact]
-		public void Explicitly_included_properties_should_be_propogated_to_nested_validators_using_strings() {
+		public void Explicitly_included_properties_should_be_propagated_to_nested_validators_using_strings() {
 			var results = validator.Validate(person, "Address");
 			results.Errors.Count.ShouldEqual(2);
 			results.Errors.First().PropertyName.ShouldEqual("Address.Postcode");
@@ -110,12 +112,33 @@ namespace FluentValidation.Tests {
 		}
 
 		[Fact]
-		public void Async_condition_should_work_with_complex_property() {
+		public async Task Condition_should_work_with_complex_property_when_invoked_async() {
 			var validator = new TestValidator() {
-				v => v.RuleFor(x => x.Address).SetValidator(new AddressValidator()).WhenAsync(async x => x.Address.Line1 == "foo")
+				v => v.RuleFor(x => x.Address).SetValidator(new AddressValidator()).When(x => x.Address.Line1 == "foo")
 			};
 
-			var result = validator.ValidateAsync(person).Result;
+			var result = await validator.ValidateAsync(person);
+			result.IsValid.ShouldBeTrue();
+		}
+
+
+		[Fact]
+		public async Task Async_condition_should_work_with_complex_property() {
+			var validator = new TestValidator() {
+				v => v.RuleFor(x => x.Address).SetValidator(new AddressValidator()).WhenAsync(async (x,c) => x.Address.Line1 == "foo")
+			};
+
+			var result = await validator.ValidateAsync(person);
+			result.IsValid.ShouldBeTrue();
+		}
+
+		[Fact]
+		public void Async_condition_should_work_with_complex_property_when_validator_invoked_synchronously() {
+			var validator = new TestValidator() {
+				v => v.RuleFor(x => x.Address).SetValidator(new AddressValidator()).WhenAsync(async (x,c) => x.Address.Line1 == "foo")
+			};
+
+			var result = validator.Validate(person);
 			result.IsValid.ShouldBeTrue();
 		}
 
@@ -126,7 +149,7 @@ namespace FluentValidation.Tests {
 			};
 
 			var validator = new TestValidator {
-				v => v.RuleFor(x => x.Address).SetValidator(addressValidator)	
+				v => v.RuleFor(x => x.Address).SetValidator(addressValidator)
 			};
 
 			var result = validator.Validate(new Person { Address = new Address() });
@@ -134,16 +157,37 @@ namespace FluentValidation.Tests {
 		}
 
         [Fact]
-        public void Can_directly_validate_multiple_fields_of_same_type()
-        {
+        public void Can_directly_validate_multiple_fields_of_same_type() {
             var sut = new TestObjectValidator();
             var testObject = new TestObject {
                 Foo2 = new TestDetailObject() { Surname = "Bar" }
             };
-            
+
             //Should not throw
             sut.Validate(testObject);
         }
+
+		[Fact]
+		public void Validates_child_validator_synchronously() {
+			var validator = new TracksAsyncCallValidator<Person>();
+			var addressValidator = new TracksAsyncCallValidator<Address>();
+			addressValidator.RuleFor(x => x.Line1).NotNull();
+			validator.RuleFor(x => x.Address).SetValidator(addressValidator);
+
+			validator.Validate(new Person() {Address = new Address()});
+			addressValidator.WasCalledAsync.ShouldEqual(false);
+		}
+
+		[Fact]
+		public void Validates_child_validator_asynchronously() {
+			var validator = new TracksAsyncCallValidator<Person>();
+			var addressValidator = new TracksAsyncCallValidator<Address>();
+			addressValidator.RuleFor(x => x.Line1).NotNull();
+			validator.RuleFor(x => x.Address).SetValidator(addressValidator);
+
+			validator.ValidateAsync(new Person() {Address = new Address()}).GetAwaiter().GetResult();
+			addressValidator.WasCalledAsync.ShouldEqual(true);
+		}
 
         public class TestObject
         {
@@ -209,12 +253,26 @@ namespace FluentValidation.Tests {
 		public class InfiniteLoopValidator : AbstractValidator<InfiniteLoop> {
 			public InfiniteLoopValidator() {
 				RuleFor(x => x.Property).SetValidator(new InfiniteLoop2Validator());
-			} 
+			}
 		}
 
 		public class InfiniteLoop2Validator : AbstractValidator<InfiniteLoop2> {
 			public InfiniteLoop2Validator() {
 				RuleFor(x => x.Property).SetValidator(new InfiniteLoopValidator());
+			}
+		}
+
+		public class TracksAsyncCallValidator<T> : AbstractValidator<T> {
+			public bool? WasCalledAsync;
+
+			public override ValidationResult Validate(ValidationContext<T> context) {
+				WasCalledAsync = false;
+				return base.Validate(context);
+			}
+
+			public override Task<ValidationResult> ValidateAsync(ValidationContext<T> context, CancellationToken cancellation = new CancellationToken()) {
+				WasCalledAsync = true;
+				return base.ValidateAsync(context, cancellation);
 			}
 		}
 	}

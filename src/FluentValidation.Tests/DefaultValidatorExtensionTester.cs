@@ -1,19 +1,19 @@
 #region License
-// Copyright (c) Jeremy Skinner (http://www.jeremyskinner.co.uk)
-// 
-// Licensed under the Apache License, Version 2.0 (the "License"); 
-// you may not use this file except in compliance with the License. 
-// You may obtain a copy of the License at 
-// 
-// http://www.apache.org/licenses/LICENSE-2.0 
-// 
-// Unless required by applicable law or agreed to in writing, software 
-// distributed under the License is distributed on an "AS IS" BASIS, 
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-// See the License for the specific language governing permissions and 
+// Copyright (c) .NET Foundation and contributors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
 // limitations under the License.
-// 
-// The latest version of this file can be found at https://github.com/jeremyskinner/FluentValidation
+//
+// The latest version of this file can be found at https://github.com/FluentValidation/FluentValidation
 #endregion
 
 namespace FluentValidation.Tests {
@@ -25,7 +25,7 @@ namespace FluentValidation.Tests {
 	using Xunit;
 	using Validators;
 
-	
+
 	public class DefaultValidatorExtensionTester {
 		private AbstractValidator<Person> validator;
 
@@ -61,6 +61,18 @@ namespace FluentValidation.Tests {
 		public void Length_should_create_ExactLengthValidator() {
 			validator.RuleFor(x => x.Surname).Length(5);
 			AssertValidator<ExactLengthValidator>();
+		}
+
+		[Fact]
+		public void Length_should_create_MaximumLengthValidator() {
+			validator.RuleFor(x => x.Surname).MaximumLength(5);
+			AssertValidator<MaximumLengthValidator>();
+		}
+
+		[Fact]
+		public void Length_should_create_MinimumLengthValidator() {
+			validator.RuleFor(x => x.Surname).MinimumLength(5);
+			AssertValidator<MinimumLengthValidator>();
 		}
 
 		[Fact]
@@ -198,19 +210,30 @@ namespace FluentValidation.Tests {
 			validator.RuleFor(x => x.NullableInt).GreaterThanOrEqualTo(x => x.OtherNullableInt);
 			AssertValidator<GreaterThanOrEqualValidator>();
 		}
-#if !PORTABLE40
+
 		[Fact]
-		public void MustAsync_should_not_throw_InvalidCastException() {
+		public void ScalePrecision_should_create_ScalePrecisionValidator() {
+			validator.RuleFor(x => x.Discount).ScalePrecision(2, 5);
+			AssertValidator<ScalePrecisionValidator>();
+		}
+
+		[Fact]
+		public void ScalePrecision_should_create_ScalePrecisionValidator_with_ignore_trailing_zeros() {
+			validator.RuleFor(x => x.Discount).ScalePrecision(2, 5, true);
+			AssertValidator<ScalePrecisionValidator>();
+		}
+
+		[Fact]
+		public async Task MustAsync_should_not_throw_InvalidCastException() {
 			var model = new Model
 			{
 				Ids = new Guid[0]
 			};
 			var validator = new AsyncModelTestValidator();
 			// this fails with "Specified cast is not valid" error
-			var result = validator.ValidateAsync(model).Result;
+			var result = await validator.ValidateAsync(model);
 			result.IsValid.ShouldBeTrue();
 		}
-#endif
 		private void AssertValidator<TValidator>() {
 			var rule = (PropertyRule)validator.First();
 			rule.CurrentValidator.ShouldBe<TValidator>();
@@ -221,7 +244,6 @@ namespace FluentValidation.Tests {
 			public IEnumerable<Guid> Ids { get; set; }
 		}
 
-#if !PORTABLE40
 		class AsyncModelTestValidator : AbstractValidator<Model>
 		{
 			public AsyncModelTestValidator()
@@ -230,7 +252,6 @@ namespace FluentValidation.Tests {
 					.MustAsync((g, cancel) => Task.FromResult(true));
 			}
 		}
-#endif
 	}
 
 }
